@@ -1,0 +1,58 @@
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+
+  color: rgba(0, 0, 0, 0.87);
+  background-color: #ffffff;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+canvas {
+  position: fixed;
+  /* top: 0;
+  left: 0; */
+}
+
+#container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
+
+.obit-controls-gizmo {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  bottom: 0.5em;
+  left: 0.5em;
+  z-index: 1000;
+
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 100%;
+  transition: background-color 0.15s linear;
+  cursor: pointer;
+}
+
+.obit-controls-gizmo.dragging,
+.obit-controls-gizmo:hover {
+  background-color: #fff2;
+}
+
+.obit-controls-gizmo.inactive {
+  pointer-events: none;
+  /* background-color: #fff0 !important; */
+}
