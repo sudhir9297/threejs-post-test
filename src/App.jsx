@@ -33,8 +33,8 @@ class App extends React.Component {
     this.camera = new THREE.PerspectiveCamera(
       75,
       this.sizes.width / this.sizes.height,
-      0.01,
-      2000
+      0.001,
+      1000
     );
     this.camera.position.set(2, 2, 2);
     this.scene.add(this.camera);
@@ -93,11 +93,6 @@ class App extends React.Component {
   };
 
   addObject = (scene) => {
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
-
     this.material = new THREE.ShaderMaterial({
       extensions: {
         derivatives: "#extension GL_OES_standard_derivatives : enable",
