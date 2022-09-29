@@ -12,7 +12,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 
-import Model from "./assets/models/scene2.glb?url";
+import Model from "./assets/models/scene.glb?url";
 import HDR from "./assets/hdr/default.hdr?url";
 
 import fragment from "./utils/shader/fragment.glsl";
