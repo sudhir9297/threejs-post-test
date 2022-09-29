@@ -36,12 +36,12 @@ class App extends React.Component {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color("#1c1c1c");
     this.camera = new THREE.PerspectiveCamera(
-      75,
+      45,
       this.sizes.width / this.sizes.height,
       10,
-      1000
+      2000
     );
-    this.camera.position.set(100, 200, 500);
+    this.camera.position.set(2, 300, 700);
     this.scene.add(this.camera);
 
     this.manager = new THREE.LoadingManager();
@@ -85,24 +85,7 @@ class App extends React.Component {
       this.controls.update();
       window.requestAnimationFrame(renderLoop);
 
-      // this.renderer.render(this.scene, this.camera);
-
-      this.renderer.autoClear = false;
-      this.renderer.clear();
-
-      this.renderer.setClearColor(0x000000, 1);
-      this.camera.layers.set(1);
       this.composer.render();
-
-      this.renderer.clearDepth();
-      this.camera.layers.set(0);
-
-      // this.globalDarkeningVal.value = 1;
-      // this.renderer.setClearColor(0x000000, 1);
-      // this.composer.render();
-      // this.globalDarkeningVal.value = 0;
-      this.renderer.setClearColor(0x303030, 1);
-      this.finalComposer.render();
     };
     renderLoop();
   };
@@ -120,121 +103,55 @@ class App extends React.Component {
     //   value: 1,
     // };
 
-    const meshUrl = "/models/scene2.glb";
+    const meshUrl = "/models/scene.glb";
 
     const GLtfLoader = new GLTFLoader(this.manager);
     GLtfLoader.load(meshUrl, (gltf) => {
       gltf.scene.position.set(0, -1, 0);
       gltf.scene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
-          if (child.name.split("_").slice(0, 2).join("_") === "light_plane") {
+          if (
+            child.name.split("_").slice(0, 2).join("_") === "light_plane" ||
+            child.name.split("_")[0] === "lightPlane"
+          ) {
+            child.material.toneMapped = false;
             child.material.emissive = new THREE.Color(0xffffff);
-            child.material.emissiveIntensity = 1;
+            child.material.emissiveIntensity = 10;
             child.material.needsUpdate = true;
-            child.layers.enable(1);
-            // child.material.onBeforeCompile = (shader) => {
-            //   shader.uniforms.globalDarkening = this.globalDarkeningVal;
-            //   shader.uniforms.hasBloom = { value: 1 };
-            //   shader.fragmentShader =
-            //     `
-            //   uniform float globalDarkening;
-            //   uniform float hasBloom;
-            // ` + shader.fragmentShader;
-            //   shader.fragmentShader = shader.fragmentShader.replace(
-            //     `void main() {`,
-            //     `void main() {
-            //   if (globalDarkening > 0.5 || hasBloom < 0.5){
-            // `
-            //   );
-            //   shader.fragmentShader = shader.fragmentShader.replace(
-            //     `#include <dithering_fragment>`,
-            //     `#include <dithering_fragment>
-            //     } else {
-            //       gl_FragColor = vec4(vec3(1.0), 1.0);
-            //     }`
-            //   );
-            // };
           }
         }
       });
 
       this.scene.add(gltf.scene);
     });
-
-    // this.material = new THREE.ShaderMaterial({
-    //   extensions: {
-    //     derivatives: "#extension GL_OES_standard_derivatives : enable",
-    //   },
-    //   side: THREE.DoubleSide,
-    //   uniforms: {
-    //     time: { value: 0 },
-    //     resolution: { value: new THREE.Vector4() },
-    //   },
-    //   // wireframe: true,
-    //   // transparent: true,
-    //   vertexShader: vertex,
-    //   fragmentShader: fragment,
-    // });
-
-    // this.geometry = new THREE.BoxBufferGeometry(1, 1, 1);
-
-    // this.Box = new THREE.Mesh(this.geometry, this.material);
-    // scene.add(this.Box);
   };
 
   postProcessing = () => {
-    this.renderScene = new RenderPass(this.scene, this.camera);
-    this.params = {
-      exposure: 1,
-      strength: 1,
-      threshold: 0.5,
-      radius: 0.5,
-    };
-    this.bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      1.5,
-      0.4,
-      0.85
+    const target = new THREE.WebGLRenderTarget(
+      this.sizes.width,
+      this.sizes.height,
+      {
+        type: THREE.HalfFloatType,
+        format: THREE.RGBAFormat,
+        encoding: THREE.sRGBEncoding,
+      }
     );
-    this.bloomPass.threshold = this.params.threshold;
-    this.bloomPass.strength = this.params.strength;
-    this.bloomPass.radius = this.params.radius;
-    this.bloomPass.renderToScreen = true;
+    target.samples = 8;
 
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.renderToScreen = false;
+    this.renderScene = new RenderPass(this.scene, this.camera);
+
+    this.bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(this.sizes.width, this.sizes.height),
+      2,
+      1,
+      1
+    );
+
+    this.composer = new EffectComposer(this.renderer, target);
+
     this.composer.setSize(window.innerWidth, window.innerHeight);
     this.composer.addPass(this.renderScene);
     this.composer.addPass(this.bloomPass);
-    this.finalPass = new ShaderPass(
-      new THREE.ShaderMaterial({
-        uniforms: {
-          baseTexture: { value: null },
-          bloomTexture: { value: this.composer.renderTarget2.texture },
-        },
-        vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-        }`,
-        fragmentShader: `
-        uniform sampler2D baseTexture;
-    	  uniform sampler2D bloomTexture;
-    	  varying vec2 vUv;
-    	  void main() {
-    		  gl_FragColor = ( texture2D( baseTexture, vUv ) + vec4( 1.0 ) * texture2D( bloomTexture, vUv ) );
-    	  }
-        `,
-        defines: {},
-      }),
-      "baseTexture"
-    );
-    this.finalPass.needsSwap = true;
-
-    this.finalComposer = new EffectComposer(this.renderer);
-    this.finalComposer.addPass(this.renderScene);
-    this.finalComposer.addPass(this.finalPass);
   };
 
   render() {
