@@ -12,6 +12,9 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 
+import Model from "./assets/models/scene2.glb?url";
+import HDR from "./assets/hdr/default.hdr?url";
+
 import fragment from "./utils/shader/fragment.glsl";
 import vertex from "./utils/shader/vertex.glsl";
 
@@ -75,7 +78,7 @@ class App extends React.Component {
     this.renderer.toneMappingExposure = 1;
     this.renderer.outputEncoding = THREE.sRGBEncoding;
 
-    HDRMapLoader("/hdr/default.hdr", this.renderer, this.scene, this.manager);
+    HDRMapLoader(HDR, this.renderer, this.scene, this.manager);
 
     this.addObject();
     this.postProcessing();
@@ -99,19 +102,11 @@ class App extends React.Component {
   };
 
   addObject = () => {
-    // this.globalDarkeningVal = {
-    //   value: 1,
-    // };
-
-    const meshUrl = "/models/scene.glb";
-
     const GLtfLoader = new GLTFLoader(this.manager);
-    GLtfLoader.load(meshUrl, (gltf) => {
+    GLtfLoader.load(Model, (gltf) => {
       gltf.scene.position.set(0, -1, 0);
       gltf.scene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
-          console.log(child.name);
-
           if (
             child.name.split("_").slice(0, 2).join("_") === "light_plane" ||
             child.name.split("_").slice(0, 2).join("_") === "wallLamp_light" ||
