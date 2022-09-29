@@ -110,8 +110,12 @@ class App extends React.Component {
       gltf.scene.position.set(0, -1, 0);
       gltf.scene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
+          console.log(child.name);
+
           if (
             child.name.split("_").slice(0, 2).join("_") === "light_plane" ||
+            child.name.split("_").slice(0, 2).join("_") === "wallLamp_light" ||
+            child.name.split("_")[0] === "ceilingLight" ||
             child.name.split("_")[0] === "lightPlane"
           ) {
             child.material.toneMapped = false;
