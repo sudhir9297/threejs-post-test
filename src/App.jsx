@@ -42,15 +42,15 @@ class App extends React.Component {
       bloomRadius: 1,
 
       enableNoise: false,
-      noiseSpeed: 0.02,
-      noiseIntensity: 0.025,
+      noiseSpeed: 0.01,
+      noiseIntensity: 0.005,
 
       enableDistortion: false,
-      baseIor: 0.8,
-      bandOffset: 0.003,
-      jitterIntensity: 1.0,
-      samples: 7,
-      distortionMode: "rygcbv",
+      baseIor: 1,
+      bandOffset: 0.001,
+      jitterIntensity: 0.5,
+      samples: 8,
+      distortionMode: "rgb",
     };
 
     this.InitialSetup();
@@ -123,7 +123,7 @@ class App extends React.Component {
       this.bloomPass.threshold = this.params.bloomThreshold;
       this.bloomPass.strength = this.params.bloomStrength;
       this.bloomPass.radius = this.params.bloomRadius;
-      this.bloomPass.renderToScreen = this.params.enableBloom;
+      this.bloomPass.enabled = this.params.enableBloom;
 
       this.grainPass.enabled = this.params.enableNoise;
       this.grainPass.material.uniforms.noiseOffset.value +=
@@ -153,7 +153,7 @@ class App extends React.Component {
   };
 
   addGui() {
-    const gui = new dat.GUI({ name: "Parameter" });
+    const gui = new dat.GUI();
 
     const bloomFolder = gui.addFolder("Bloom");
     bloomFolder.add(this.params, "enableBloom");
