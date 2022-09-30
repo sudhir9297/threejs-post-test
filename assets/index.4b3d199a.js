@@ -3556,19 +3556,15 @@ void main() {
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */var QC=lu.exports,JC=Symbol.for("react.element"),e2=Symbol.for("react.fragment"),t2=Object.prototype.hasOwnProperty,n2=QC.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentOwner,i2={key:!0,ref:!0,__self:!0,__source:!0};function Mv(n,e,t){var i,r={},s=null,o=null;t!==void 0&&(s=""+t),e.key!==void 0&&(s=""+e.key),e.ref!==void 0&&(o=e.ref);for(i in e)t2.call(e,i)&&!i2.hasOwnProperty(i)&&(r[i]=e[i]);if(n&&n.defaultProps)for(i in e=n.defaultProps,e)r[i]===void 0&&(r[i]=e[i]);return{$$typeof:JC,type:n,key:s,ref:o,props:r,_owner:n2.current}}Cu.Fragment=e2;Cu.jsx=Mv;Cu.jsxs=Mv;(function(n){n.exports=Cu})(wv);const Jd=wv.exports.jsx;class r2 extends qv.Component{constructor(t){super(t);lo(this,"InitialSetup",()=>{this.container=document.getElementById("container");const t=document.getElementById("container").getBoundingClientRect();this.sizes={width:t.width,height:t.height},this.canvas=document.querySelector("canvas.webgl"),this.scene=new eT,this.scene.background=new Se("#1c1c1c"),this.camera=new Ut(45,this.sizes.width/this.sizes.height,10,2e3),this.camera.position.set(2,300,700),this.scene.add(this.camera),this.manager=new uv,this.manager.onProgress=function(r,s,o){s/o*100===100&&console.log("scene loaded")},this.controls=new _C(this.camera,this.canvas),this.controls.addEventListener("change",()=>{}),this.controls.touches={ONE:Bi.ROTATE,TWO:Bi.DOLLY_PAN},this.controlsGizmo=new vC(this.controls,{size:100,padding:8}),this.container.appendChild(this.controlsGizmo.domElement),this.renderer=new tv({canvas:this.canvas,antialias:!0}),this.renderer.setSize(this.sizes.width,this.sizes.height),this.renderer.setPixelRatio(Math.min(window.devicePixelRatio,2)),this.renderer.toneMapping=I0,this.renderer.toneMappingExposure=1,this.renderer.outputEncoding=ze,yC(LC,this.renderer,this.scene,this.manager),this.addObject(),this.postProcessing(),this.addGui(),window.addEventListener("resize",this.resize);const i=()=>{this.controls.update(),window.requestAnimationFrame(i),this.bloomPass.threshold=this.params.bloomThreshold,this.bloomPass.strength=this.params.bloomStrength,this.bloomPass.radius=this.params.bloomRadius,this.bloomPass.enabled=this.params.enableBloom,this.grainPass.enabled=this.params.enableNoise,this.grainPass.material.uniforms.noiseOffset.value+=this.params.noiseSpeed,this.grainPass.material.uniforms.intensity.value=this.params.noiseIntensity,this.distortPass.enabled=this.params.enableDistortion,this.distortPass.material.uniforms.baseIor.value=this.params.baseIor,this.distortPass.material.uniforms.bandOffset.value=this.params.bandOffset,this.distortPass.material.uniforms.jitterOffset.value+=.01,this.distortPass.material.uniforms.jitterIntensity.value=this.params.jitterIntensity,this.composer.render()};i()});lo(this,"resize",()=>{this.sizes.width=this.container.offsetWidth,this.sizes.height=this.container.offsetHeight,this.renderer.setSize(this.sizes.width,this.sizes.height),this.camera.aspect=this.sizes.width/this.sizes.height,this.camera.updateProjectionMatrix()});lo(this,"addObject",()=>{new VT(this.manager).load(AC,i=>{i.scene.position.set(0,-1,0),i.scene.traverse(r=>{r instanceof wn&&(r.name.split("_").slice(0,2).join("_")==="light_plane"||r.name.split("_").slice(0,2).join("_")==="wallLamp_light"||r.name.split("_")[0]==="ceilingLight"||r.name.split("_")[0]==="lightPlane")&&(r.material.toneMapped=!1,r.material.emissive=new Se("#e2e2e2"),r.material.emissiveIntensity=10,r.material.needsUpdate=!0)}),this.scene.add(i.scene)})});lo(this,"postProcessing",()=>{const t=new En(this.sizes.width,this.sizes.height,{minFilter:et,magFilter:et,type:zn,format:yn,encoding:ze});t.samples=8,this.renderScene=new bC(this.scene,this.camera),this.bloomPass=new Zs(new ge(this.sizes.width,this.sizes.height),1,1,1);const i={uniforms:{tDiffuse:{type:"t",value:null},resolution:{value:new ge(window.innerWidth*window.devicePixelRatio,window.innerHeight*window.devicePixelRatio)},power:{value:.5}},vertexShader:`
-      
           varying vec2 vUv;
-      
           void main() {
-      
             vUv = uv;
             gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-      
           }
           `,fragmentShader:`
         uniform sampler2D tDiffuse;
         uniform vec2 resolution;
-  
+
         vec2 barrelDistortion(vec2 coord, float amt) {
           vec2 cc = coord - 0.5;
           float dist = dot(cc, cc);
@@ -3594,7 +3590,6 @@ void main() {
           float hi = 1.0-lo;
           float w = linterp( remap( t, 1.0/6.0, 5.0/6.0 ) );
           ret = vec4(lo,1.0,hi, 1.) * vec4(1.0-w, w, 1.0-w, 1.);
-  
           return pow( ret, vec4(1.0/2.2) );
         }
   
