@@ -18,6 +18,7 @@ import { LensDistortionShader } from "./utils/shaderPass/LensDistortionShader";
 
 import Model from "./assets/models/scene.glb?url";
 import HDR from "./assets/hdr/default.hdr?url";
+import { GTAOPass } from "./utils/shaderPass/Gtao/GTAOPass";
 
 import * as dat from "dat.gui";
 
@@ -51,6 +52,35 @@ class App extends React.Component {
       jitterIntensity: 0.5,
       samples: 8,
       distortionMode: "rgb",
+
+      enabled: true,
+      rotationJitter: 1,
+      radiusJitter: 0,
+
+      directionOffset: 0.0,
+      stepOffset: 0.0,
+      numSteps: 8,
+      numDirections: 1,
+      intensity: 1.0,
+      radius: 2.0,
+
+      enableFalloff: true,
+      falloffStart: 0.4,
+      falloffEnd: 2.0,
+
+      blurMode: GTAOPass.BOX_BLUR,
+      blurIterations: 5,
+      blurStride: 1,
+
+      display: GTAOPass.DEFAULT,
+      renderTargetScale: 0.5,
+      scene: "pyramid",
+
+      ambientLightColor: [255, 255, 255],
+      ambientLightIntensity: 0,
+
+      enableLightBounce: false,
+      lightBounceIntensity: 1.0,
     };
 
     this.InitialSetup();
@@ -120,6 +150,8 @@ class App extends React.Component {
       this.controls.update();
       window.requestAnimationFrame(renderLoop);
 
+      if (this.scene.update) this.scene.update();
+
       this.bloomPass.threshold = this.params.bloomThreshold;
       this.bloomPass.strength = this.params.bloomStrength;
       this.bloomPass.radius = this.params.bloomRadius;
@@ -138,6 +170,39 @@ class App extends React.Component {
       this.distortPass.material.uniforms.jitterOffset.value += 0.01;
       this.distortPass.material.uniforms.jitterIntensity.value =
         this.params.jitterIntensity;
+
+      this.gtaoPass.debug.display = parseInt(this.params.display);
+      this.gtaoPass.enabled = this.params.enabled;
+      this.gtaoPass.singlePass = this.params.singlePass;
+      this.gtaoPass.rotationJitter = parseInt(this.params.rotationJitter);
+      this.gtaoPass.radiusJitter = parseInt(this.params.radiusJitter);
+      this.gtaoPass.blurMode = parseFloat(this.params.blurMode);
+      this.gtaoPass.blurIterations = this.params.blurIterations;
+      this.gtaoPass.blurStride = this.params.blurStride;
+      this.gtaoPass.numSteps = this.params.numSteps;
+      this.gtaoPass.numDirections = this.params.numDirections;
+      this.gtaoPass.intensity = this.params.intensity;
+      this.gtaoPass.radius = this.params.radius;
+      this.gtaoPass.falloffStart = this.params.falloffStart;
+      this.gtaoPass.falloffEnd = this.params.falloffEnd;
+      this.gtaoPass.enableFalloff = this.params.enableFalloff;
+      this.gtaoPass.directionOffset = this.params.directionOffset;
+      this.gtaoPass.stepOffset = this.params.stepOffset;
+
+      this.gtaoPass.lightBounceIntensity = this.params.enableLightBounce
+        ? this.params.lightBounceIntensity
+        : 0.0;
+
+      // ambientLight.color.setRGB( ...this.params.ambientLightColor.map( c => c / 255 ) );
+      // ambientLight.intensity = this.params.ambientLightIntensity;
+
+      this.gtaoPass.ambientColor.setRGB(
+        ...this.params.ambientLightColor.map((c) => c / 255)
+      );
+      this.gtaoPass.ambientIntensity = this.params.ambientLightIntensity;
+
+      // gammaPass.enabled = this.gtaoPass.debug.display === GTAOPass.DEFAULT;
+      this.gtaoPass.debug.display === GTAOPass.DEFAULT;
 
       this.composer.render();
     };
@@ -160,13 +225,13 @@ class App extends React.Component {
     bloomFolder.add(this.params, "bloomStrength").min(0).max(10).step(0.001);
     bloomFolder.add(this.params, "bloomThreshold").min(0).max(1).step(0.01);
     bloomFolder.add(this.params, "bloomRadius").min(-1).max(1).step(0.01);
-    bloomFolder.open();
+    // bloomFolder.open();
 
-    const noiseFolder = gui.addFolder("noise");
+    const noiseFolder = gui.addFolder("Flim Grain");
     noiseFolder.add(this.params, "enableNoise");
     noiseFolder.add(this.params, "noiseSpeed").min(0).max(0.1).step(0.00001);
     noiseFolder.add(this.params, "noiseIntensity").min(0).max(1).step(0.001);
-    noiseFolder.open();
+    // noiseFolder.open();
 
     const distortionFolder = gui.addFolder("distortion");
     distortionFolder.add(this.params, "enableDistortion");
@@ -210,7 +275,174 @@ class App extends React.Component {
         }
         this.distortPass.material.needsUpdate = true;
       });
-    distortionFolder.open();
+    // distortionFolder.open();
+
+    const settingsFolder = gui.addFolder("Gtao");
+    settingsFolder.add(this.params, "directionOffset").step(0.01);
+    settingsFolder.add(this.params, "stepOffset").step(0.01);
+    settingsFolder.add(this.params, "rotationJitter", {
+      NONE: 0,
+      RANDOM: 1,
+      BLUE_NOISE: 2,
+    });
+    settingsFolder.add(this.params, "radiusJitter", {
+      NONE: 0,
+      RANDOM: 1,
+      BLUE_NOISE: 2,
+    });
+    settingsFolder.add(this.params, "numSteps").step(1);
+    settingsFolder.add(this.params, "numDirections").step(1);
+    settingsFolder.add(this.params, "intensity").step(0.01);
+    settingsFolder.add(this.params, "radius").step(0.01);
+
+    settingsFolder.add(this.params, "enableFalloff");
+    settingsFolder.add(this.params, "falloffStart").step(0.01);
+    settingsFolder.add(this.params, "falloffEnd").step(0.01);
+
+    settingsFolder
+      .add(this.params, "renderTargetScale")
+      .step(0.01)
+      .onChange((v) => {
+        this.gtaoPass.renderTargetScale = v;
+      });
+    // settingsFolder
+    //   .add(this.params, "directionOffset")
+    //   .min(0.0)
+    //   .max(1)
+    //   .step(0.01);
+    // settingsFolder.add(this.params, "stepOffset").min(0.0).max(1).step(0.01);
+    // settingsFolder.add(this.params, "rotationJitter", {
+    //   NONE: 0,
+    //   RANDOM: 1,
+    //   BLUE_NOISE: 2,
+    // });
+    // settingsFolder.add(this.params, "radiusJitter", {
+    //   NONE: 0,
+    //   RANDOM: 1,
+    //   BLUE_NOISE: 2,
+    // });
+    // settingsFolder.add(this.params, "numSteps").min(1).max(32).step(1);
+    // settingsFolder.add(this.params, "numDirections").min(1).max(32).step(1);
+    // settingsFolder.add(this.params, "intensity").min(0).max(2.0).step(0.01);
+    // settingsFolder.add(this.params, "radius").min(0).max(10.0).step(0.01);
+
+    // settingsFolder.add(this.params, "enableFalloff");
+    // settingsFolder.add(this.params, "falloffStart").min(0).max(10.0).step(0.01);
+    // settingsFolder.add(this.params, "falloffEnd").min(0).max(10.0).step(0.01);
+
+    // settingsFolder
+    //   .add(this.params, "renderTargetScale")
+    //   .min(0.1)
+    //   .max(1.0)
+    //   .step(0.01)
+    //   .onChange((v) => {
+    //     this.gtaoPass.renderTargetScale = v;
+    //   });
+    // settingsFolder.open();
+
+    const blurFolder = gui.addFolder("blur");
+    blurFolder.add(this.params, "blurMode", {
+      NO_BLUR: GTAOPass.NO_BLUR,
+      BOX_BLUR: GTAOPass.BOX_BLUR,
+      CROSS_BLUR: GTAOPass.CROSS_BLUR,
+      DIAGONAL_BLUR: GTAOPass.DIAGONAL_BLUR,
+    });
+    blurFolder.add(this.params, "blurIterations").min(1).max(20).step(1);
+    blurFolder.add(this.params, "blurStride").min(1).max(5).step(1);
+    // blurFolder.open();
+
+    const ambientLightFolder = gui.addFolder("ambient light");
+    ambientLightFolder.addColor(this.params, "ambientLightColor").name("color");
+    ambientLightFolder
+      .add(this.params, "ambientLightIntensity")
+      .name("intensity")
+      .min(0)
+      .max(10)
+      .step(0.1);
+    // ambientLightFolder.open();
+
+    const lightBounceFolder = gui.addFolder("illumination");
+    lightBounceFolder.add(this.params, "enableLightBounce");
+    lightBounceFolder
+      .add(this.params, "lightBounceIntensity")
+      .min(0.0)
+      .max(5.0)
+      .step(0.01);
+    // lightBounceFolder.open();
+
+    const debugFolder = gui.addFolder("debug");
+    debugFolder.add(this.params, "display", {
+      DEFAULT: GTAOPass.DEFAULT,
+      DEPTH: GTAOPass.DEPTH,
+      NORMAL: GTAOPass.NORMAL,
+      AO_SAMPLE: GTAOPass.AO_SAMPLE,
+      COLOR_SAMPLE: GTAOPass.COLOR_SAMPLE,
+    });
+    // debugFolder.open();
+
+    this.gtaoPass.renderTargetScale = this.params.renderTargetScale;
+
+    gui.open();
+  }
+
+  createKnotScene() {
+    const group = new THREE.Group();
+
+    const ground = new THREE.Mesh(
+      new THREE.BoxBufferGeometry(),
+      new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 })
+    );
+    ground.receiveShadow = true;
+    ground.scale.set(50, 0.1, 50);
+    ground.position.y = -1;
+    group.add(ground);
+
+    const wall = new THREE.Mesh(
+      new THREE.BoxBufferGeometry(),
+      new THREE.MeshStandardMaterial({ color: 0xff8700, roughness: 0.8 })
+    );
+    wall.receiveShadow = true;
+    wall.castShadow = true;
+    wall.scale.set(0.1, 3, 3);
+    wall.position.x = -1.25;
+    group.add(wall);
+
+    const knot = new THREE.Mesh(
+      new THREE.TorusKnotBufferGeometry(1, 0.35, 200, 32, 2, 5),
+      new THREE.MeshStandardMaterial({ color: 0xcf031f, roughness: 1 })
+    );
+    knot.position.y = 0.1;
+    knot.castShadow = true;
+    knot.scale.setScalar(0.5);
+    knot.receiveShadow = true;
+    group.add(knot);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(3, 2, 1);
+    directionalLight.castShadow = true;
+
+    const shadowCam = directionalLight.shadow.camera;
+    shadowCam.left = shadowCam.bottom = -3;
+    shadowCam.right = shadowCam.top = 3;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    group.add(directionalLight);
+
+    const sphere = new THREE.Mesh(new THREE.SphereBufferGeometry());
+    directionalLight.add(sphere);
+
+    group.update = function () {
+      const t = (Math.sin(window.performance.now() * 0.001) + 1.0) / 2.0;
+      const angle = THREE.MathUtils.lerp(-Math.PI / 10.0, Math.PI / 2.0, t);
+
+      directionalLight.position.set(10.0, 0.0, 0.0);
+      directionalLight.position.applyAxisAngle(
+        new THREE.Vector3(0, 0, 1),
+        angle
+      );
+    };
+
+    return group;
   }
 
   addObject = () => {
@@ -235,6 +467,9 @@ class App extends React.Component {
 
       this.scene.add(gltf.scene);
     });
+
+    // const knotScene = this.createKnotScene();
+    // this.scene.add(knotScene);
   };
 
   postProcessing = () => {
@@ -337,6 +572,7 @@ class App extends React.Component {
     this.gammaCorrection = new ShaderPass(GammaCorrectionShader);
     this.grainPass = new ShaderPass(FilmGrainShader);
     this.distortPass = new ShaderPass(LensDistortionShader);
+    this.gtaoPass = new GTAOPass(this.scene, this.camera);
 
     this.composer = new EffectComposer(this.renderer, target);
 
@@ -345,6 +581,8 @@ class App extends React.Component {
     // this.composer.addPass(chromaticAberrationPass);
     this.composer.addPass(this.grainPass);
     this.composer.addPass(this.distortPass);
+    this.composer.addPass(this.gtaoPass);
+
     this.composer.addPass(this.bloomPass);
     this.composer.addPass(this.gammaCorrection);
   };
