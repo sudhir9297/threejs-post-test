@@ -12,19 +12,21 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { GammaCorrectionShader } from "three/examples/jsm/shaders/GammaCorrectionShader.js";
+import { ProgressiveLightMap } from "three/addons/misc/ProgressiveLightMap.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
 
 import { FilmGrainShader } from "./utils/shaderPass/FilmGrainShader";
 import { LensDistortionShader } from "./utils/shaderPass/LensDistortionShader";
 
-import Model from "./assets/models/scene.glb?url";
+import Model from "./assets/models/scene3.glb?url";
 import HDR from "./assets/hdr/default.hdr?url";
 import { GTAOPass } from "./utils/shaderPass/Gtao/GTAOPass";
+import { chromaticAberration } from "./utils/shaderPass/chromaticAberration";
 
 import * as dat from "dat.gui";
 
 import fragment from "./utils/shader/fragment.glsl";
 import vertex from "./utils/shader/vertex.glsl";
-
 class App extends React.Component {
   constructor(props) {
     super(props);
@@ -81,12 +83,31 @@ class App extends React.Component {
 
       enableLightBounce: false,
       lightBounceIntensity: 1.0,
+
+      chromaticEnable: false,
+      max_distort: 2.2,
+      num_iter: 12,
+      reci_num_iter_f: 1.0,
+
+      enableShadow: true,
+      blurEdge: true,
+      blendWindow: 200,
+      lightRadius: 50,
+      ambientWeight: 0.5,
     };
 
     this.InitialSetup();
   }
 
   InitialSetup = () => {
+    this.shadowMapRes = 512;
+    this.lightMapRes = 1024;
+    this.lightCount = 8;
+    this.lightOrigin = null;
+    this.progressiveSurfacemap;
+    this.dirLights = [];
+    this.lightmapObjects = [];
+
     // THREE.ColorManagement.legacyMode = false;
     this.container = document.getElementById("container");
     const item = document.getElementById("container").getBoundingClientRect();
@@ -105,6 +126,7 @@ class App extends React.Component {
       2000
     );
     this.camera.position.set(2, 300, 700);
+    // this.camera.position.set(12, 12, 12);
     this.scene.add(this.camera);
 
     this.manager = new THREE.LoadingManager();
@@ -126,6 +148,7 @@ class App extends React.Component {
       size: 100,
       padding: 8,
     });
+
     this.container.appendChild(this.controlsGizmo.domElement);
 
     this.renderer = new THREE.WebGLRenderer({
@@ -137,8 +160,29 @@ class App extends React.Component {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1;
     this.renderer.outputEncoding = THREE.sRGBEncoding;
-
+    this.renderer.shadowMap.enabled = true;
+    // this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     HDRMapLoader(HDR, this.renderer, this.scene, this.manager);
+
+    // this.control2 = new TransformControls(
+    //   this.camera,
+    //   this.renderer.domElement
+    // );
+    // this.control2.addEventListener("dragging-changed", (event) => {
+    //   this.controls.enabled = !event.value;
+    // });
+    // this.control2.attach(this.lightOrigin);
+    // this.scene.add(this.control2);
+
+    //Testing
+    this.progressiveSurfacemap = new ProgressiveLightMap(
+      this.renderer,
+      this.lightMapRes
+    );
+
+    this.lightOrigin = new THREE.Group();
+    this.lightOrigin.position.set(60, 150, 100);
+    this.scene.add(this.lightOrigin);
 
     this.addObject();
     this.postProcessing();
@@ -150,7 +194,52 @@ class App extends React.Component {
       this.controls.update();
       window.requestAnimationFrame(renderLoop);
 
+      if (this.params.enableShadow) {
+        this.progressiveSurfacemap.update(
+          this.camera,
+          this.params.blendWindow,
+          this.params.blurEdge
+        );
+
+        if (!this.progressiveSurfacemap.firstUpdate) {
+          this.progressiveSurfacemap.showDebugLightmap(false);
+        }
+      }
+
+      for (let l = 0; l < this.dirLights.length; l++) {
+        // Sometimes they will be sampled from the target direction
+        // Sometimes they will be uniformly sampled from the upper hemisphere
+        if (Math.random() > this.params.ambientWeight) {
+          this.dirLights[l].position.set(
+            this.lightOrigin.position.x +
+              Math.random() * this.params.lightRadius,
+            this.lightOrigin.position.y +
+              Math.random() * this.params.lightRadius,
+            this.lightOrigin.position.z +
+              Math.random() * this.params.lightRadius
+          );
+        } else {
+          // Uniform Hemispherical Surface Distribution for Ambient Occlusion
+          const lambda = Math.acos(2 * Math.random() - 1) - 3.14159 / 2.0;
+          const phi = 2 * 3.14159 * Math.random();
+          this.dirLights[l].position.set(
+            Math.cos(lambda) * Math.cos(phi) * 300,
+            Math.abs(Math.cos(lambda) * Math.sin(phi) * 300) + 20,
+            Math.sin(lambda) * 300
+          );
+        }
+      }
+
       if (this.scene.update) this.scene.update();
+
+      // this.chromaticAberrationPass.material.uniforms.chromaticEnable.value =
+      //   this.params.chromaticEnable;
+      this.chromaticAberrationPass.material.uniforms.max_distort.value =
+        this.params.max_distort;
+      this.chromaticAberrationPass.material.uniforms.num_iter.value =
+        this.params.num_iter;
+      this.chromaticAberrationPass.material.uniforms.reci_num_iter_f.value =
+        this.params.reci_num_iter_f;
 
       this.bloomPass.threshold = this.params.bloomThreshold;
       this.bloomPass.strength = this.params.bloomStrength;
@@ -192,9 +281,6 @@ class App extends React.Component {
       this.gtaoPass.lightBounceIntensity = this.params.enableLightBounce
         ? this.params.lightBounceIntensity
         : 0.0;
-
-      // ambientLight.color.setRGB( ...this.params.ambientLightColor.map( c => c / 255 ) );
-      // ambientLight.intensity = this.params.ambientLightIntensity;
 
       this.gtaoPass.ambientColor.setRGB(
         ...this.params.ambientLightColor.map((c) => c / 255)
@@ -277,7 +363,29 @@ class App extends React.Component {
       });
     // distortionFolder.open();
 
+    const chromaticAberrationPassFolder = gui.addFolder(
+      "chromaticAberrationPass"
+    );
+    chromaticAberrationPassFolder.add(this.params, "chromaticEnable");
+    chromaticAberrationPassFolder
+      .add(this.params, "max_distort")
+      .min(-10)
+      .max(10)
+      .step(0.001);
+    chromaticAberrationPassFolder
+      .add(this.params, "num_iter")
+      .min(1)
+      .max(20)
+      .step(1);
+    chromaticAberrationPassFolder
+      .add(this.params, "reci_num_iter_f")
+      .min(0.0)
+      .max(20.0)
+      .step(0.01);
+
     const settingsFolder = gui.addFolder("Gtao");
+
+    settingsFolder.add(this.params, "enabled");
     settingsFolder.add(this.params, "directionOffset").step(0.01);
     settingsFolder.add(this.params, "stepOffset").step(0.01);
     settingsFolder.add(this.params, "rotationJitter", {
@@ -382,10 +490,23 @@ class App extends React.Component {
 
     this.gtaoPass.renderTargetScale = this.params.renderTargetScale;
 
+    const progressiveShadow = gui.addFolder("progressiveShadow");
+    progressiveShadow.add(this.params, "enableShadow");
+    progressiveShadow.add(this.params, "blurEdge");
+    progressiveShadow.add(this.params, "blendWindow").min(1).max(500).step(1);
+    progressiveShadow.add(this.params, "lightRadius").min(1).max(200).step(10);
+    progressiveShadow
+      .add(this.params, "ambientWeight")
+      .min(0.0)
+      .max(1.0)
+      .step(0.01);
+
     gui.open();
   }
 
   createKnotScene() {
+    let lightmapObjects = [];
+
     const group = new THREE.Group();
 
     const ground = new THREE.Mesh(
@@ -393,19 +514,11 @@ class App extends React.Component {
       new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 })
     );
     ground.receiveShadow = true;
-    ground.scale.set(50, 0.1, 50);
+    ground.castShadow = true;
+    ground.scale.set(10, 0.1, 10);
     ground.position.y = -1;
     group.add(ground);
-
-    const wall = new THREE.Mesh(
-      new THREE.BoxBufferGeometry(),
-      new THREE.MeshStandardMaterial({ color: 0xff8700, roughness: 0.8 })
-    );
-    wall.receiveShadow = true;
-    wall.castShadow = true;
-    wall.scale.set(0.1, 3, 3);
-    wall.position.x = -1.25;
-    group.add(wall);
+    lightmapObjects.push(ground);
 
     const knot = new THREE.Mesh(
       new THREE.TorusKnotBufferGeometry(1, 0.35, 200, 32, 2, 5),
@@ -413,39 +526,53 @@ class App extends React.Component {
     );
     knot.position.y = 0.1;
     knot.castShadow = true;
-    knot.scale.setScalar(0.5);
     knot.receiveShadow = true;
+    knot.scale.setScalar(0.5);
     group.add(knot);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(3, 2, 1);
+    lightmapObjects.push(knot);
+
+    const directionalLight = new THREE.DirectionalLight(0xfff00f, 1);
+    directionalLight.position.set(1, 1, 1);
     directionalLight.castShadow = true;
+    lightmapObjects.push(directionalLight);
+    this.dirLights = [];
 
     const shadowCam = directionalLight.shadow.camera;
     shadowCam.left = shadowCam.bottom = -3;
     shadowCam.right = shadowCam.top = 3;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
-    group.add(directionalLight);
 
     const sphere = new THREE.Mesh(new THREE.SphereBufferGeometry());
     directionalLight.add(sphere);
 
-    group.update = function () {
-      const t = (Math.sin(window.performance.now() * 0.001) + 1.0) / 2.0;
-      const angle = THREE.MathUtils.lerp(-Math.PI / 10.0, Math.PI / 2.0, t);
-
-      directionalLight.position.set(10.0, 0.0, 0.0);
-      directionalLight.position.applyAxisAngle(
-        new THREE.Vector3(0, 0, 1),
-        angle
-      );
-    };
+    this.ProgressiveSurfaceRenderer.addObjectsToLightMap(lightmapObjects);
 
     return group;
   }
 
   addObject = () => {
+    for (let l = 0; l < this.lightCount; l++) {
+      const dirLight = new THREE.DirectionalLight(
+        0xffffff,
+        1.0 / this.lightCount
+      );
+      dirLight.name = "Dir. Light " + l;
+      dirLight.position.set(200, 200, 200);
+      dirLight.castShadow = true;
+      dirLight.shadow.camera.near = 100;
+      dirLight.shadow.camera.far = 5000;
+      dirLight.shadow.camera.right = 150;
+      dirLight.shadow.camera.left = -150;
+      dirLight.shadow.camera.top = 150;
+      dirLight.shadow.camera.bottom = -150;
+      dirLight.shadow.mapSize.width = this.shadowMapRes;
+      dirLight.shadow.mapSize.height = this.shadowMapRes;
+      this.lightmapObjects.push(dirLight);
+      this.dirLights.push(dirLight);
+    }
+
     const GLtfLoader = new GLTFLoader(this.manager);
     GLtfLoader.load(Model, (gltf) => {
       gltf.scene.position.set(0, -1, 0);
@@ -462,12 +589,35 @@ class App extends React.Component {
             child.material.emissiveIntensity = 10;
             child.material.needsUpdate = true;
           }
+          child.castShadow = true;
+          child.receiveShadow = true;
+          // child.material = new THREE.MeshPhongMaterial();
+
+          this.lightmapObjects.push(child);
+          this.progressiveSurfacemap.addObjectsToLightMap(this.lightmapObjects);
+        } else {
+          child.layers.disableAll(); // Disable Rendering for this
         }
       });
-
       this.scene.add(gltf.scene);
+      const lightTarget = new THREE.Group();
+      lightTarget.position.set(0, 20, 0);
+      for (let l = 0; l < this.dirLights.length; l++) {
+        this.dirLights[l].target = lightTarget;
+      }
+
+      gltf.scene.children[0].add(lightTarget);
     });
 
+    const groundMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(600, 600),
+      new THREE.MeshPhongMaterial({ color: 0xffffff, depthWrite: true })
+    );
+    groundMesh.position.y = -0.1;
+    groundMesh.rotation.x = -Math.PI / 2;
+    groundMesh.name = "Ground Mesh";
+    this.lightmapObjects.push(groundMesh);
+    this.scene.add(groundMesh);
     // const knotScene = this.createKnotScene();
     // this.scene.add(knotScene);
   };
@@ -494,7 +644,7 @@ class App extends React.Component {
       1,
       1
     );
-    const chromaticAberration = {
+    const chromaticAberration2 = {
       uniforms: {
         tDiffuse: { type: "t", value: null },
         resolution: {
@@ -567,7 +717,14 @@ class App extends React.Component {
         }
         `,
     };
-    let chromaticAberrationPass = new ShaderPass(chromaticAberration);
+    this.chromaticAberrationPass = new ShaderPass(chromaticAberration);
+    // this.chromaticAberrationPass2 = new ShaderPass(chromaticAberration2);
+
+    this.chromaticAberrationPass.material.uniforms.resolution.value =
+      new THREE.Vector2(
+        window.innerWidth * window.devicePixelRatio,
+        window.innerHeight * window.devicePixelRatio
+      );
 
     this.gammaCorrection = new ShaderPass(GammaCorrectionShader);
     this.grainPass = new ShaderPass(FilmGrainShader);
@@ -578,7 +735,7 @@ class App extends React.Component {
 
     this.composer.setSize(window.innerWidth, window.innerHeight);
     this.composer.addPass(this.renderScene);
-    // this.composer.addPass(chromaticAberrationPass);
+    // this.composer.addPass(this.chromaticAberrationPass2);
     this.composer.addPass(this.grainPass);
     this.composer.addPass(this.distortPass);
     this.composer.addPass(this.gtaoPass);
